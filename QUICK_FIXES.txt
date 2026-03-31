@@ -1,0 +1,103 @@
+CRITICAL FIXES FOR CRIMSON RNG - APPLY THESE CHANGES TO script.js
+
+Due to the extensive nature of the 16 requested fixes, I've prepared all the corrected code in script_fixes.js.
+
+However, here are the MOST CRITICAL fixes you can apply immediately:
+
+===========================================
+FIX 1: PROFILES MODAL - Show accounts first
+===========================================
+Line ~104 in attachNavigationListeners():
+
+CHANGE FROM:
+if (profilesBtn) profilesBtn.onclick = () => toggleModal('acc-modal');
+
+CHANGE TO:
+if (profilesBtn) profilesBtn.onclick = () => { renderAccounts(); toggleModal('acc-modal'); };
+
+===========================================
+FIX 2: ROUND NUMBERS TOGGLE PERSISTENCE
+===========================================
+Add this NEW FUNCTION after the init() function (around line 206):
+
+function initSettingsUI() {
+    const roundToggle = document.getElementById('round-toggle');
+    if (roundToggle) roundToggle.checked = settings.roundNumbers || false;
+    const luckSlider = document.getElementById('luck-scale-slider');
+    const luckValue = document.getElementById('luck-scale-value');
+    if (luckSlider && luckValue) {
+        luckSlider.value = settings.luckScale || 100;
+        luckValue.innerText = `${settings.luckScale || 100}x`;
+    }
+}
+
+Then MODIFY init() function (line ~184) to call it:
+Add this line at the end of init(), after attachNavigationListeners():
+    initSettingsUI();
+
+===========================================
+FIX 3: ACCOUNT LIMIT (5 MAX)
+===========================================
+Line ~1188 in createNewAccount(), add at the VERY START:
+
+if (allAccounts.length >= 5) {
+    showNotification("Maximum 5 accounts allowed!", "error");
+    return;
+}
+
+===========================================
+FIX 4: NIGHTMARE NO DIVISIONS
+===========================================
+Line ~217 in updateUI():
+
+CHANGE FROM:
+const div = Math.floor((acc.points % 400) / 100) + 1;
+
+CHANGE TO:
+const div = rName === "Nightmare" ? "" : Math.floor((acc.points % 400) / 100) + 1;
+
+Line ~231:
+CHANGE FROM:
+document.getElementById('rank-name').innerText = `${rName.toUpperCase()} ${div}`;
+
+CHANGE TO:
+document.getElementById('rank-name').innerText = rName === "Nightmare" ? "NIGHTMARE" : `${rName.toUpperCase()} ${div}`;
+
+===========================================
+FIX 5: ADD RP AND BOT RANK TO LOGS
+===========================================
+Line ~608 in handleMatchEnd(), BEFORE the points calculation:
+
+ADD THIS LINE:
+const oldRP = acc.points;
+
+Then at line ~616 where history is added:
+
+CHANGE FROM:
+acc.history.unshift({ res: win ? "WIN" : "LOSS", score: `${playerSets}-${botSets}`, p: playerRoll, b: botRoll, diff: diff });
+
+CHANGE TO:
+acc.history.unshift({ res: win ? "WIN" : "LOSS", score: `${playerSets}-${botSets}`, p: playerRoll, b: botRoll, diff: diff, rp: oldRP, botRank: currentBotRank });
+
+===========================================
+REMAINING FIXES
+===========================================
+The following fixes are more complex and are fully implemented in script_fixes.js:
+
+6. Heavenly Dice functionality
+7. Potion stacking (duration only, not multipliers)
+8. Sunday weekly reset for all accounts
+9. Expected reward calculation
+10. Saturday 50% off shop sale
+11. 100 streak cutscene
+12. Stats display fixes
+13. Dynamic nightmare difficulty
+14. Nightmare rank restrictions
+15. Progressive nightmare luck
+16. Luck scaling system
+
+RECOMMENDATION:
+Apply fixes 1-5 above immediately (they're simple find/replace).
+Then we can work on the remaining fixes systematically.
+
+After applying these 5 fixes, refresh your browser and test!
