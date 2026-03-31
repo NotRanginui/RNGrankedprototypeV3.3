@@ -3210,7 +3210,32 @@ function renderAccounts() {
     save();
 }
 
-window.editName = () => { let n = prompt("Identity Update:", allAccounts[currentAccIdx].name); if(n && n.trim().length > 0) { allAccounts[currentAccIdx].name = n.trim().substring(0, 12); updateUI(); }};
+window.editName = () => {
+    const n = prompt("Identity Update:", allAccounts[currentAccIdx].name);
+    if (!n || !n.trim().length) return;
+    const newName = n.trim().substring(0, 12);
+    const acc = allAccounts[currentAccIdx];
+    const becomingRanked = (newName.startsWith('#r') || newName.startsWith('#rs')) && !isRankedAccount(acc);
+    if (becomingRanked) {
+        const ok = confirm(
+            "⚔️ RANKED ACCOUNT WARNING\n\n" +
+            "Renaming to #r or #rs will RESET your RP to 0 and clear your match history.\n\n" +
+            "Your coins and permanent luck boosts are kept.\n\n" +
+            "Continue?"
+        );
+        if (!ok) return;
+        acc.points = 0;
+        acc.streak = 0;
+        acc.bestStreak = 0;
+        acc.wins = 0;
+        acc.losses = 0;
+        acc.history = [];
+        acc.weeklyHistory = [];
+        acc.highestRpEver = 0;
+    }
+    acc.name = newName;
+    updateUI();
+};
 window.updateSettings = () => { settings.roundNumbers = document.getElementById('round-toggle').checked; save(); updateUI(); };
 window.updateLuckScaling = () => {
     // Function kept for backward compatibility but does nothing
