@@ -688,9 +688,15 @@ function updateUI() {
     document.getElementById('exp-progress').style.width = (acc.points % 100) + "%";
     document.getElementById('bot-display-name').innerText = `BOT (${currentBotRank.toUpperCase()})`;
 
-    // Ranked account UI
+    // Ranked account UI — hide non-stats nav elements
+    const _navHideIds = ['nav-profiles-btn', 'nav-casino-dd', 'nav-store-dd', 'settings-btn'];
     const transferBtn = document.getElementById('nav-transfer-btn');
     const rankedBanner = document.getElementById('ranked-mode-banner');
+    const _isRanked = isRankedAccount(acc);
+    _navHideIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = _isRanked ? 'none' : '';
+    });
     if (isFullRanked(acc)) {
         if (transferBtn) { transferBtn.style.opacity = '0.3'; transferBtn.style.pointerEvents = 'none'; transferBtn.textContent = '🔒 Transfer'; }
         if (rankedBanner) {
@@ -703,7 +709,7 @@ function updateUI() {
         if (rankedBanner) {
             rankedBanner.style.display = 'flex';
             rankedBanner.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;padding:4px 10px;background:rgba(59,130,246,0.1);border-top:1px solid rgba(59,130,246,0.2);border-bottom:1px solid rgba(59,130,246,0.2);';
-            rankedBanner.innerHTML = `<span style="color:#3b82f6;font-size:0.6rem;">⚔️</span><span style="font-family:'Orbitron',sans-serif;font-size:0.45rem;letter-spacing:3px;color:#93c5fd;">SOFT RANKED</span><span style="color:#475569;font-size:0.45rem;">·</span><span style="font-size:0.45rem;color:#64748b;letter-spacing:1px;">BOOSTS ALLOWED · NO CHEATS</span>`;
+            rankedBanner.innerHTML = `<span style="color:#3b82f6;font-size:0.6rem;">⚔️</span><span style="font-family:'Orbitron',sans-serif;font-size:0.45rem;letter-spacing:3px;color:#93c5fd;">SOFT RANKED</span><span style="color:#475569;font-size:0.45rem;">·</span><span style="font-size:0.45rem;color:#64748b;letter-spacing:1px;">LUCK 2.0x · NO CHEATS</span>`;
         }
     } else {
         if (transferBtn) { transferBtn.style.opacity = ''; transferBtn.style.pointerEvents = ''; transferBtn.textContent = '💸 Transfer'; }
@@ -2333,7 +2339,7 @@ window.openGlobalLeaderboard = async () => {
             .limit(100)
             .get();
         const docs = [];
-        snap.forEach(d => { const data = d.data(); if (!data.isTainted) docs.push(data); });
+        snap.forEach(d => { const data = d.data(); if (!data.isTainted && !data.isRanked) docs.push(data); });
         // Remove null rank from display
         const filtered = docs.filter(d => d.rank && d.rank !== 'NULL' && d.rank !== null);
         if (!filtered.length) {
@@ -2392,17 +2398,22 @@ window.openRankedLeaderboard = async () => {
             .orderBy('points','desc')
             .limit(100)
             .get();
-        const docs = [];
-        snap.forEach(d => docs.push(d.data()));
-        if (!docs.length) {
-            el.innerHTML = `<div style="text-align:center;padding:40px;opacity:0.4;font-size:0.75rem;letter-spacing:3px;">NO RANKED ACCOUNTS YET</div>`;
-            return;
-        }
-        el.innerHTML = docs.map((p, i) => {
+        const allDocs = [];
+        snap.forEach(d => allDocs.push(d.data()));
+
+        const TABS = [
+            { id:'all', label:'ALL RANKED',  filter: () => true },
+            { id:'r',   label:'#R ONLY',     filter: d => d.name && d.name.startsWith('#r') && !d.name.startsWith('#rs') },
+            { id:'rs',  label:'#RS ONLY',    filter: d => d.name && d.name.startsWith('#rs') },
+        ];
+        let activeTab = 'all';
+
+        const renderRows = (docs) => docs.length ? docs.map((p, i) => {
             const col  = RANK_COL_MAP[p.rank] || '#64748b';
             const icon = RANK_ICON_MAP[p.rank] || '?';
             const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `<b style="color:#475569">#${i+1}</b>`;
-            const tag = p.name.startsWith('#rs')
+            const isRS = p.name && p.name.startsWith('#rs');
+            const tag = isRS
                 ? `<span style="background:#172554;color:#93c5fd;font-size:0.5rem;padding:2px 6px;border-radius:8px;margin-left:5px;">#RS</span>`
                 : `<span style="background:#1a0a2e;color:#c084fc;font-size:0.5rem;padding:2px 6px;border-radius:8px;margin-left:5px;">#R</span>`;
             return `<div style="display:flex;align-items:center;padding:12px 14px;background:#0f172a;margin-bottom:5px;border-radius:10px;border-left:3px solid ${col};gap:10px;">
@@ -2417,7 +2428,33 @@ window.openRankedLeaderboard = async () => {
                     <div style="font-size:0.6rem;color:#475569;">RP</div>
                 </div>
             </div>`;
-        }).join('');
+        }).join('') : `<div style="text-align:center;padding:40px;opacity:0.4;font-size:0.75rem;letter-spacing:3px;">NO ACCOUNTS IN THIS CATEGORY</div>`;
+
+        const switchTab = (tabId) => {
+            activeTab = tabId;
+            const tabsEl = el.querySelector('#rlb-tabs');
+            if (tabsEl) tabsEl.querySelectorAll('button').forEach(b => {
+                const on = b.dataset.tab === activeTab;
+                b.style.background = on ? 'rgba(139,92,246,0.28)' : 'rgba(15,23,42,0.8)';
+                b.style.color = on ? 'rgba(196,168,255,0.95)' : 'rgba(100,116,139,0.7)';
+                b.style.borderColor = on ? 'rgba(139,92,246,0.5)' : 'rgba(139,92,246,0.18)';
+            });
+            const itemsEl = el.querySelector('#rlb-items');
+            if (itemsEl) itemsEl.innerHTML = renderRows(allDocs.filter(TABS.find(t => t.id === tabId).filter));
+        };
+
+        el.innerHTML = `
+            <div id="rlb-tabs" style="display:flex;gap:6px;margin-bottom:12px;">
+                ${TABS.map(t => `<button data-tab="${t.id}" style="flex:1;padding:8px 4px;border-radius:8px;border:1px solid rgba(139,92,246,0.18);font-family:'Orbitron',sans-serif;font-size:0.48rem;letter-spacing:2px;cursor:pointer;transition:all 0.15s;background:rgba(15,23,42,0.8);color:rgba(100,116,139,0.7);">${t.label}</button>`).join('')}
+            </div>
+            <div id="rlb-items"></div>
+        `;
+        el.querySelector('#rlb-tabs').addEventListener('click', e => {
+            const btn = e.target.closest('button[data-tab]');
+            if (btn) switchTab(btn.dataset.tab);
+        });
+        switchTab('all');
+
     } catch(e) {
         el.innerHTML = `<div style="text-align:center;padding:20px 16px;">
             <div style="color:#ef4444;font-size:0.75rem;margin-bottom:10px;">⚠️ Failed to load ranked leaderboard</div>
@@ -2451,6 +2488,7 @@ function toggleModal(id) {
 function attachListeners() {
     window.onkeydown = (e) => { 
         if(e.key.toLowerCase() === 'p' && document.activeElement.tagName !== "INPUT") {
+            if (isRankedAccount(allAccounts[currentAccIdx])) { showNotification('Admin panel locked on ranked accounts.', 'error'); return; }
             document.getElementById('settings-modal').style.display = 'none';
             openAdminPanel(); 
         }
@@ -2466,13 +2504,8 @@ function calculateTotalLuck() {
     const acc = allAccounts[currentAccIdx];
     // #r accounts: pure RNG — no luck bonuses at all
     if (isFullRanked(acc)) return 2.0;
-    // #rs accounts: potions/boosts only, no base luck or admin bonuses
-    if (isSoftRanked(acc)) {
-        const now = Date.now();
-        let potionMult = 1.0;
-        acc.activePotions.forEach(p => { if (now < p.expiresAt) potionMult = Math.max(potionMult, p.multiplier); });
-        return acc.permanentLuckBoost * potionMult;
-    }
+    // #rs accounts: same flat luck — boosts/potions fully blocked in ranked
+    if (isSoftRanked(acc)) return 2.0;
     let totalLuck = playerLuck * acc.permanentLuckBoost * adminRPBonus * singleUseLuckMult;
     const now = Date.now();
     let highestPotionMultiplier = 1.0;
@@ -2583,8 +2616,11 @@ function startPotionTimerManager() {
 function buyItem(itemKey) {
     const acc = allAccounts[currentAccIdx];
     const item = SHOP_ITEMS[itemKey];
-    
     if (!item) return false;
+    if (isRankedAccount(acc) && item.type !== 'cosmetic') {
+        showNotification('Shop items that affect luck are locked on ranked accounts.', 'error');
+        return false;
+    }
     
     const discountActive = isShopDiscountDay();
     const finalCost = discountActive ? Math.floor(item.cost / 2) : item.cost;
@@ -2617,8 +2653,11 @@ function buyItem(itemKey) {
 function usePotion(potionKey) {
     const acc = allAccounts[currentAccIdx];
     const item = SHOP_ITEMS[potionKey];
-    
     if (!item || item.type !== "consumable") return false;
+    if (isRankedAccount(acc)) {
+        showNotification('Boosts are locked on ranked accounts.', 'error');
+        return false;
+    }
     
     if (acc.inventory[potionKey] <= 0) {
         showNotification("No potions available!", "error");
@@ -2704,6 +2743,7 @@ function transferCoins(targetAccIdx, amount) {
 // ==========================================
 
 window.openAdminPanel = () => {
+    if (isRankedAccount(allAccounts[currentAccIdx])) { showNotification('Admin panel locked on ranked accounts.', 'error'); return; }
     const pass = prompt("PASS:");
     if (pass === "admin123") {
         document.getElementById('admin-luck-input').value = playerLuck;
@@ -2976,7 +3016,8 @@ window.openShop = () => {
         ? `<div style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-weight:bold;font-size:0.85rem;text-align:center;">🎉 FLASH SALE — 50% OFF TODAY!</div>`
         : `<div style="background:#1e293b;color:#64748b;padding:8px 12px;border-radius:6px;margin-bottom:12px;font-size:0.75rem;text-align:center;letter-spacing:2px;">NEXT SALE: ${discountDayName.toUpperCase()}</div>`;
 
-    shopList.innerHTML = bannerHTML + Object.entries(SHOP_ITEMS).map(([key, item]) => {
+    const isRanked = isRankedAccount(acc);
+    shopList.innerHTML = bannerHTML + (isRanked ? `<div style="background:#1e293b;border:1px solid #374151;border-radius:10px;padding:18px;text-align:center;color:#64748b;font-family:'Orbitron',sans-serif;font-size:0.55rem;letter-spacing:3px;">🔒 SHOP LOCKED<br><span style="font-size:0.5rem;opacity:0.6;font-family:'Courier New',monospace;letter-spacing:1px;">Ranked accounts cannot purchase items</span></div>` : Object.entries(SHOP_ITEMS).map(([key, item]) => {
         const finalCost = discountActive ? Math.floor(item.cost / 2) : item.cost;
         const canAfford = acc.coins >= finalCost;
         const owned = item.type === "consumable" ? acc.inventory[key] || 0 : "N/A";
@@ -2999,7 +3040,7 @@ window.openShop = () => {
                 </button>
             </div>
         `;
-    }).join('');
+    }).join(''));
     toggleModal('shop-modal');
 };
 
